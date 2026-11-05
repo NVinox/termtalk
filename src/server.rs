@@ -1,3 +1,4 @@
+use crate::chat;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 
 pub fn create_server(port: u16) {
@@ -5,13 +6,13 @@ pub fn create_server(port: u16) {
 
     match TcpListener::bind(host) {
         Ok(listener) => {
-            println!(
-                "Server created and listening on host {}:{}",
-                "0.0.0.0", port
-            );
+            println!("Server created and listening on host {}", host);
 
             match listener.accept() {
-                Ok((_, addr)) => println!("Client connecting from IP {}", addr),
+                Ok((stream, addr)) => {
+                    println!("Client connecting from IP {}", addr);
+                    chat::start_chat(stream);
+                }
                 Err(e) => println!("Error accepting connection: {}", e),
             };
         }
