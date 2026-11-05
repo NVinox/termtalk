@@ -1,7 +1,9 @@
-use std::net::TcpListener;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 
 pub fn create_server(port: u16) {
-    match TcpListener::bind(format!("0.0.0.0:{}", port)) {
+    let host = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+
+    match TcpListener::bind(host) {
         Ok(listener) => {
             println!(
                 "Server created and listening on host {}:{}",

@@ -1,3 +1,4 @@
+use crate::client;
 use crate::server;
 use clap::{Args, Parser, Subcommand};
 use std::net::Ipv4Addr;
@@ -50,8 +51,6 @@ pub fn init_commands() {
 
     match &cli.commands {
         Commands::Create(data) => server::create_server(data.port),
-        Commands::Connect(data) => {
-            println!("Connecting to {} on {} port...", data.host, data.port);
-        }
+        Commands::Connect(data) => client::create_client(data.host, data.port),
     };
 }
