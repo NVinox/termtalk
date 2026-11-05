@@ -1,3 +1,4 @@
+mod chat;
 mod client;
 mod commands;
 mod server;
