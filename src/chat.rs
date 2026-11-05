@@ -1,3 +1,4 @@
+use colored::Colorize;
 use std::io;
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -14,7 +15,7 @@ pub fn start_chat(stream: TcpStream) {
         loop {
             match stream_for_reading.read(&mut buffer) {
                 Ok(0) => {
-                    println!("User is disconnected");
+                    println!("{}", "User is disconnected".red().bold());
                     process::exit(0);
                 }
                 Ok(bytes) => {
@@ -22,7 +23,7 @@ pub fn start_chat(stream: TcpStream) {
                     println!("From User: {}", message.trim());
                 }
                 Err(e) => {
-                    println!("Connection error: {}", e);
+                    println!("{}", format!("Connection error: {e}").red().bold());
                 }
             };
         }
@@ -38,7 +39,7 @@ pub fn start_chat(stream: TcpStream) {
         let input = input.trim();
 
         if stream_for_writing.write_all(input.as_bytes()).is_err() {
-            println!("Failed to send message");
+            println!("{}", "Failed to send message".red().bold());
             break;
         }
     }
