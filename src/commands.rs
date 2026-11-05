@@ -1,3 +1,4 @@
+use crate::server;
 use clap::{Args, Parser, Subcommand};
 use std::net::Ipv4Addr;
 
@@ -48,9 +49,7 @@ pub fn init_commands() {
     let cli = Cli::parse();
 
     match &cli.commands {
-        Commands::Create(data) => {
-            println!("Server host is listen on {} port...", data.port);
-        }
+        Commands::Create(data) => server::create_server(data.port),
         Commands::Connect(data) => {
             println!("Connecting to {} on {} port...", data.host, data.port);
         }
