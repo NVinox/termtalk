@@ -3,11 +3,11 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use ip_discovery::blocking::get_ipv4;
 use local_ip_address::local_ip;
 
-pub struct Hosts {
+pub struct Host {
     port: u16,
 }
 
-impl Hosts {
+impl Host {
     pub fn new(port: u16) -> Self {
         Self { port }
     }

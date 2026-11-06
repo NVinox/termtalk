@@ -1,11 +1,11 @@
 use crate::chat;
-use crate::host::Hosts;
+use crate::host::Host;
 
 use colored::Colorize;
 use std::net::TcpListener;
 
 pub fn create_server(port: u16) {
-    let host = Hosts::new(port);
+    let host = Host::new(port);
 
     match TcpListener::bind(host.get_broadcast()) {
         Ok(listener) => {
