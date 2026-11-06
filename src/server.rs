@@ -1,17 +1,32 @@
 use crate::chat;
+use crate::host::Hosts;
+
 use colored::Colorize;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
+use std::net::TcpListener;
 
 pub fn create_server(port: u16) {
-    let host = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port);
+    let host = Hosts::new(port);
 
-    match TcpListener::bind(host) {
+    match TcpListener::bind(host.get_broadcast()) {
         Ok(listener) => {
             println!(
                 "{}",
-                format!("Server created and listening on host {}", host)
-                    .green()
-                    .bold()
+                format!(
+                    "Server created and listening on external host {}",
+                    host.get_external()
+                )
+                .green()
+                .bold()
+            );
+
+            println!(
+                "{}",
+                format!(
+                    "Server created and listening on internal host {}",
+                    host.get_internal()
+                )
+                .green()
+                .bold()
             );
 
             match listener.accept() {
