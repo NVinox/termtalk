@@ -1,3 +1,5 @@
+mod ui;
+
 fn main() {
-    println!("Hello, world!");
+    ui::ui().expect("Create ui interface error");
 }

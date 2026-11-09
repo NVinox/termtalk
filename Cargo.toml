@@ -5,3 +5,8 @@ edition = "2024"
 rust-version = "1.99.1"
 
 [dependencies]
+crossterm = "0.29.0"
+futures-util = "0.3.34"
+ratatui = "0.30.2"
+tokio = { version = "1.54.1", features = ["full"] }
+tokio-tungstenite = "0.30.0"
