@@ -59,7 +59,6 @@ pub fn ui() -> io::Result<()> {
         }
     }
 
-    // 4. Восстанавливаем терминал в обычный вид при выходе
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
     Ok(())
