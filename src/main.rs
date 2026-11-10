@@ -1,6 +1,9 @@
+mod arguments;
 mod ui;
 
 #[tokio::main]
 async fn main() {
-    ui::ui().expect("Create UI interface error");
+    let _ = arguments::create();
+
+    ui::create().expect("Create UI interface error");
 }

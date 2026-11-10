@@ -12,7 +12,7 @@ use ratatui::{
 use std::io::{self, stdout};
 use std::time::Duration;
 
-pub fn ui() -> io::Result<()> {
+pub fn create() -> io::Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
