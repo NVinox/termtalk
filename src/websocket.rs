@@ -15,10 +15,10 @@ impl Websocket {
         Self { host, port }
     }
 
-    pub async fn connect(&self) -> (Sender<String>, Receiver<String>) {
+    pub async fn connect(&self) -> Result<(Sender<String>, Receiver<String>), String> {
         let (ws_stream, _) = connect_async(self.websocket())
             .await
-            .expect("Error to connect websocket");
+            .map_err(|e| e.to_string())?;
         let (mut ws_tx, mut ws_tr) = ws_stream.split();
         let (tx_to_network, mut tr_from_ui) = mpsc::channel::<String>(100);
         let (tx_to_ui, tr_from_network) = mpsc::channel::<String>(100);
@@ -36,7 +36,7 @@ impl Websocket {
             }
         });
 
-        (tx_to_network, tr_from_network)
+        Ok((tx_to_network, tr_from_network))
     }
 
     fn websocket(&self) -> String {
