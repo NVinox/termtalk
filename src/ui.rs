@@ -1,3 +1,6 @@
+use std::io::{self, stdout};
+use std::time::Duration;
+
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode},
@@ -9,10 +12,14 @@ use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Block, Borders, List, ListItem, Paragraph},
 };
-use std::io::{self, stdout};
-use std::time::Duration;
 
-pub fn create() -> io::Result<()> {
+use tokio::sync::mpsc::{Receiver, Sender};
+
+pub async fn create(
+    tx_to_network: Sender<String>,
+    mut tr_from_network: Receiver<String>,
+    username: &str,
+) -> io::Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
@@ -20,6 +27,10 @@ pub fn create() -> io::Result<()> {
     let mut messages: Vec<String> = vec![];
 
     loop {
+        while let Ok(message) = tr_from_network.try_recv() {
+            messages.push(message);
+        }
+
         terminal.draw(|frame| {
             let chunks = Layout::default()
                 .constraints([Constraint::Min(0), Constraint::Length(3)])
@@ -41,9 +52,12 @@ pub fn create() -> io::Result<()> {
                 match key.code {
                     KeyCode::Esc => break,
                     KeyCode::Enter => {
-                        let trimed = input.trim();
-                        if !trimed.is_empty() {
-                            messages.push(format!("{}", trimed));
+                        let message = format!("{}: {}", username, input.clone().trim());
+                        if !message.is_empty() {
+                            let tx = tx_to_network.clone();
+                            tokio::spawn(async move {
+                                let _ = tx.send(message).await;
+                            });
                             input.clear();
                         }
                     }
