@@ -43,6 +43,9 @@ pub struct UI {
     tr_from_network: Receiver<String>,
     messages: Vec<ChatEvent>,
     input: String,
+    autoscroll: bool,
+    total_lines: usize,
+    list_state: ListState,
 }
 
 impl UI {
@@ -57,6 +60,9 @@ impl UI {
             tr_from_network,
             messages: vec![],
             input: String::new(),
+            autoscroll: true,
+            total_lines: 0,
+            list_state: ListState::default(),
         }
     }
 
@@ -64,8 +70,6 @@ impl UI {
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
-        let mut list_state = ListState::default();
-        let mut autoscroll = true;
 
         let tx = self.tx_to_network.clone();
         let join_event = ChatEvent::Join {
@@ -82,17 +86,23 @@ impl UI {
             }
 
             terminal.draw(|frame| {
-                let chunks = self.chunks(frame);
-                let current_width = chunks[0].width.saturating_sub(2) as usize;
-                let messages_list = self.messages_list(current_width);
-                let input_paragraph = self.input_paragraph();
-                let items = self.list_items(current_width); // Редактировать надо. Два раза вызывается метод.
+                let chunks = Self::chunks(&self.input, frame);
+                let input_paragraph = Self::input_paragraph(&self.input);
+                let current_width = chunks[0].width.saturating_sub(2).max(1) as usize;
+                let list_items = Self::list_items(&self.messages, current_width);
 
-                if autoscroll && !items.is_empty() {
-                    list_state.select(Some(items.len().saturating_sub(1)));
+                self.total_lines = list_items.len();
+
+                if self.autoscroll && !list_items.is_empty() {
+                    self.list_state
+                        .select(Some(list_items.len().saturating_sub(1)));
                 }
 
-                frame.render_stateful_widget(messages_list, chunks[0], &mut list_state);
+                let messages_list = List::new(list_items)
+                    .block(Block::default().borders(Borders::ALL).title(CHAT_TITLE))
+                    .highlight_style(Style::default().bg(Color::DarkGray));
+
+                frame.render_stateful_widget(messages_list, chunks[0], &mut self.list_state);
                 frame.render_widget(input_paragraph, chunks[1]);
             })?;
 
@@ -123,12 +133,21 @@ impl UI {
                             self.input.pop();
                         }
                         KeyCode::Down => {
-                            autoscroll = false;
-                            list_state.select_next();
+                            self.autoscroll = false;
+
+                            if let Some(selected_index) = self.list_state.selected() {
+                                let last_index = self.total_lines.saturating_sub(1);
+
+                                if selected_index >= last_index {
+                                    self.autoscroll = true;
+                                }
+                            }
+
+                            self.list_state.select_next();
                         }
                         KeyCode::Up => {
-                            autoscroll = false;
-                            list_state.select_previous();
+                            self.autoscroll = false;
+                            self.list_state.select_previous();
                         }
                         KeyCode::Char(c) => {
                             self.input.push(c);
@@ -144,9 +163,9 @@ impl UI {
         Ok(())
     }
 
-    fn chunks(&self, frame: &Frame) -> Rc<[Rect]> {
+    fn chunks(input: &str, frame: &Frame) -> Rc<[Rect]> {
         let inner_width = frame.area().width.saturating_sub(2).max(1) as usize;
-        let lines_count = textwrap::wrap(self.input.as_str(), inner_width).len() as u16;
+        let lines_count = textwrap::wrap(input, inner_width).len() as u16;
         let input_height = (lines_count + 2).clamp(INPUT_MIN_LINES, INPUT_MAX_LINES);
 
         Layout::default()
@@ -154,22 +173,14 @@ impl UI {
             .split(frame.area())
     }
 
-    fn messages_list(&self, width: usize) -> List<'_> {
-        let list_items = self.list_items(width);
-
-        List::new(list_items)
-            .block(Block::default().borders(Borders::ALL).title(CHAT_TITLE))
-            .highlight_style(Style::default().bg(Color::DarkGray))
-    }
-
-    fn list_items(&self, width: usize) -> Vec<ListItem<'_>> {
-        self.messages
+    fn list_items(messages: &[ChatEvent], width: usize) -> Vec<ListItem<'_>> {
+        messages
             .iter()
-            .flat_map(|event| self.list_item(event, width))
+            .flat_map(|event| Self::list_item(event, width))
             .collect()
     }
 
-    fn list_item(&self, event: &ChatEvent, width: usize) -> Vec<ListItem<'_>> {
+    fn list_item(event: &ChatEvent, width: usize) -> Vec<ListItem<'_>> {
         let options = textwrap::Options::new(width).break_words(true);
 
         match event {
@@ -189,8 +200,8 @@ impl UI {
         }
     }
 
-    fn input_paragraph(&self) -> Paragraph<'_> {
-        Paragraph::new(self.input.as_str())
+    fn input_paragraph(input: &str) -> Paragraph<'_> {
+        Paragraph::new(input)
             .wrap(Wrap { trim: false })
             .block(Block::default().borders(Borders::ALL).title(INPUT_TITLE))
     }
