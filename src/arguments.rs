@@ -7,7 +7,7 @@ const MIN_LENGTH_USERNAME: usize = 2;
 
 /// Termtalk - terminal-based chat by Sergey Klimov
 #[derive(Parser)]
-#[command(version, about, long_about = None, override_usage = "termtalk <HOST> --port <PORT> --username <USERNAME>")]
+#[command(version, about, long_about = None, override_usage = "termtalk <HOST> --port <PORT> --username <USERNAME> --key <KEY>")]
 pub struct Arguments {
     /// Host to connect
     pub host: Ipv4Addr,
@@ -19,6 +19,10 @@ pub struct Arguments {
     /// Name of the user
     #[arg(short, long, value_parser = validate_username)]
     pub username: String,
+
+    /// Crypto key
+    #[arg(short, long)]
+    pub key: String,
 }
 
 pub fn create() -> Arguments {
