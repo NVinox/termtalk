@@ -111,46 +111,19 @@ impl UI {
                     match key.code {
                         KeyCode::Esc => break,
                         KeyCode::Enter => {
-                            let message = self.input.clone();
-                            let trimed = message.trim();
-
-                            if !trimed.is_empty() {
-                                let event = ChatEvent::UserMessage {
-                                    username: self.username.clone(),
-                                    text: trimed.to_string(),
-                                };
-                                let message = serde_json::to_string(&event).unwrap();
-                                let tx = self.tx_to_network.clone();
-
-                                tokio::spawn(async move {
-                                    let _ = tx.send(message).await;
-                                });
-
-                                self.input.clear();
-                            }
+                            self.send_message();
                         }
                         KeyCode::Backspace => {
-                            self.input.pop();
-                        }
-                        KeyCode::Down => {
-                            self.autoscroll = false;
-
-                            if let Some(selected_index) = self.list_state.selected() {
-                                let last_index = self.total_lines.saturating_sub(1);
-
-                                if selected_index >= last_index {
-                                    self.autoscroll = true;
-                                }
-                            }
-
-                            self.list_state.select_next();
+                            self.delete_character();
                         }
                         KeyCode::Up => {
-                            self.autoscroll = false;
-                            self.list_state.select_previous();
+                            self.scroll_up();
+                        }
+                        KeyCode::Down => {
+                            self.scroll_down();
                         }
                         KeyCode::Char(c) => {
-                            self.input.push(c);
+                            self.add_character(c);
                         }
                         _ => {}
                     }
@@ -204,5 +177,55 @@ impl UI {
         Paragraph::new(input)
             .wrap(Wrap { trim: false })
             .block(Block::default().borders(Borders::ALL).title(INPUT_TITLE))
+    }
+
+    fn send_message(&mut self) {
+        let message = self.input.clone();
+        let trimed = message.trim();
+
+        if !trimed.is_empty() {
+            let event = ChatEvent::UserMessage {
+                username: self.username.clone(),
+                text: trimed.to_string(),
+            };
+            let message = serde_json::to_string(&event).unwrap();
+            let tx = self.tx_to_network.clone();
+
+            tokio::spawn(async move {
+                let _ = tx.send(message).await;
+            });
+
+            self.input.clear();
+        }
+    }
+
+    fn scroll_up(&mut self) {
+        self.list_state.select_previous();
+        self.autoscroll_state();
+    }
+
+    fn scroll_down(&mut self) {
+        self.list_state.select_next();
+        self.autoscroll_state();
+    }
+
+    fn autoscroll_state(&mut self) {
+        if let Some(selected_index) = self.list_state.selected() {
+            let last_index = self.total_lines.saturating_sub(1);
+
+            if selected_index >= last_index {
+                self.autoscroll = true;
+            } else {
+                self.autoscroll = false;
+            }
+        }
+    }
+
+    fn delete_character(&mut self) {
+        self.input.pop();
+    }
+
+    fn add_character(&mut self, ch: char) {
+        self.input.push(ch);
     }
 }
