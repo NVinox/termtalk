@@ -13,9 +13,9 @@ use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Layout},
-    style::Stylize,
+    style::{Color, Style, Stylize},
     text::Line,
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
 
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -55,6 +55,7 @@ impl UI {
         stdout().execute(EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
         let mut input = String::new();
+        let mut list_state = ListState::default();
 
         let tx = self.tx_to_network.clone();
         let join_event = ChatEvent::Join {
@@ -66,7 +67,11 @@ impl UI {
         loop {
             while let Ok(message) = self.tr_from_network.try_recv() {
                 let event = serde_json::from_str(&message).unwrap();
+
                 self.messages.push(event);
+
+                let last_index = self.messages.len().saturating_sub(1);
+                list_state.select(Some(last_index));
             }
 
             terminal.draw(|frame| {
@@ -74,7 +79,7 @@ impl UI {
                 let messages_list = self.messages_list();
                 let input_paragraph = self.input_paragraph(&input);
 
-                frame.render_widget(messages_list, chunks[0]);
+                frame.render_stateful_widget(messages_list, chunks[0], &mut list_state);
                 frame.render_widget(input_paragraph, chunks[1]);
             })?;
 
@@ -104,6 +109,8 @@ impl UI {
                         KeyCode::Backspace => {
                             input.pop();
                         }
+                        KeyCode::Down => list_state.select_next(),
+                        KeyCode::Up => list_state.select_previous(),
                         KeyCode::Char(c) => {
                             input.push(c);
                         }
@@ -127,7 +134,9 @@ impl UI {
     fn messages_list(&self) -> List<'_> {
         let list_items = self.list_items();
 
-        List::new(list_items).block(Block::default().borders(Borders::ALL))
+        List::new(list_items)
+            .block(Block::default().borders(Borders::ALL))
+            .highlight_style(Style::default().bg(Color::DarkGray))
     }
 
     fn list_items(&self) -> Vec<ListItem<'_>> {
