@@ -1,4 +1,5 @@
 use std::io::{self, stdout};
+use std::rc::Rc;
 use std::time::Duration;
 
 use crossterm::{
@@ -6,6 +7,8 @@ use crossterm::{
     event::{self, Event, KeyCode},
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
+use ratatui::Frame;
+use ratatui::layout::Rect;
 use ratatui::{
     Terminal,
     backend::CrosstermBackend,
@@ -30,6 +33,7 @@ pub struct UI {
     username: String,
     tx_to_network: Sender<String>,
     tr_from_network: Receiver<String>,
+    messages: Vec<ChatEvent>,
 }
 
 impl UI {
@@ -42,6 +46,7 @@ impl UI {
             username: username.into(),
             tx_to_network,
             tr_from_network,
+            messages: vec![],
         }
     }
 
@@ -50,7 +55,6 @@ impl UI {
         stdout().execute(EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
         let mut input = String::new();
-        let mut messages: Vec<ChatEvent> = vec![];
 
         let tx = self.tx_to_network.clone();
         let join_event = ChatEvent::Join {
@@ -62,32 +66,13 @@ impl UI {
         loop {
             while let Ok(message) = self.tr_from_network.try_recv() {
                 let event = serde_json::from_str(&message).unwrap();
-                messages.push(event);
+                self.messages.push(event);
             }
 
             terminal.draw(|frame| {
-                let chunks = Layout::default()
-                    .constraints([Constraint::Min(0), Constraint::Length(3)])
-                    .split(frame.area());
-                let list_items: Vec<ListItem> = messages
-                    .iter()
-                    .map(|msg| match msg {
-                        ChatEvent::UserMessage { username, text } => {
-                            let line = Line::from(format!("{}: {}", username, text));
-                            ListItem::new(line)
-                        }
-                        ChatEvent::Join { username } => {
-                            let line = Line::from(format!("User {} is connected", username))
-                                .green()
-                                .italic();
-                            ListItem::new(line)
-                        }
-                    })
-                    .collect();
-                let messages_list =
-                    List::new(list_items).block(Block::default().borders(Borders::ALL));
-                let input_paragraph =
-                    Paragraph::new(input.as_str()).block(Block::default().borders(Borders::ALL));
+                let chunks = self.chunks(frame);
+                let messages_list = self.messages_list();
+                let input_paragraph = self.input_paragraph(&input);
 
                 frame.render_widget(messages_list, chunks[0]);
                 frame.render_widget(input_paragraph, chunks[1]);
@@ -131,5 +116,43 @@ impl UI {
         disable_raw_mode()?;
         stdout().execute(LeaveAlternateScreen)?;
         Ok(())
+    }
+
+    fn chunks(&self, frame: &Frame) -> Rc<[Rect]> {
+        Layout::default()
+            .constraints([Constraint::Min(0), Constraint::Length(3)])
+            .split(frame.area())
+    }
+
+    fn messages_list(&self) -> List<'_> {
+        let list_items = self.list_items();
+
+        List::new(list_items).block(Block::default().borders(Borders::ALL))
+    }
+
+    fn list_items(&self) -> Vec<ListItem<'_>> {
+        self.messages
+            .iter()
+            .map(|msg| self.list_item(msg))
+            .collect()
+    }
+
+    fn list_item(&self, event: &ChatEvent) -> ListItem<'_> {
+        match event {
+            ChatEvent::UserMessage { username, text } => {
+                let line = Line::from(format!("{}: {}", username, text));
+                ListItem::new(line)
+            }
+            ChatEvent::Join { username } => {
+                let line = Line::from(format!("User {} is connected", username))
+                    .green()
+                    .italic();
+                ListItem::new(line)
+            }
+        }
+    }
+
+    fn input_paragraph<'a>(&self, input: &'a str) -> Paragraph<'a> {
+        Paragraph::new(input).block(Block::default().borders(Borders::ALL))
     }
 }
