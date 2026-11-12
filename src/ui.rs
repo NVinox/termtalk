@@ -24,6 +24,8 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use serde::{Deserialize, Serialize};
 use serde_json;
 
+use crate::crypto::Crypto;
+
 const CHAT_TITLE: &'static str = " Chat ";
 const INPUT_TITLE: &'static str = " Message ";
 
@@ -46,6 +48,7 @@ pub struct UI {
     autoscroll: bool,
     total_lines: usize,
     list_state: ListState,
+    crypto: Crypto,
 }
 
 impl UI {
@@ -53,6 +56,7 @@ impl UI {
         tx_to_network: Sender<String>,
         tr_from_network: Receiver<String>,
         username: impl Into<String>,
+        key: String,
     ) -> Self {
         Self {
             username: username.into(),
@@ -63,6 +67,7 @@ impl UI {
             autoscroll: true,
             total_lines: 0,
             list_state: ListState::default(),
+            crypto: Crypto::new(&key),
         }
     }
 
@@ -71,18 +76,14 @@ impl UI {
         stdout().execute(EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
 
-        let tx = self.tx_to_network.clone();
-        let join_event = ChatEvent::Join {
-            username: self.username.clone(),
-        };
-        let connect_message = serde_json::to_string(&join_event).unwrap();
-        let _ = tx.send(connect_message).await;
+        self.send_join().await;
 
         loop {
-            while let Ok(message) = self.tr_from_network.try_recv() {
-                let event = serde_json::from_str(&message).unwrap();
-
-                self.messages.push(event);
+            while let Ok(encoded_message) = self.tr_from_network.try_recv() {
+                if let Ok(message) = self.crypto.decrypt(&encoded_message) {
+                    let event = serde_json::from_str(&message).unwrap();
+                    self.messages.push(event);
+                }
             }
 
             terminal.draw(|frame| {
@@ -191,9 +192,11 @@ impl UI {
             let message = serde_json::to_string(&event).unwrap();
             let tx = self.tx_to_network.clone();
 
-            tokio::spawn(async move {
-                let _ = tx.send(message).await;
-            });
+            if let Ok(encoded_message) = self.crypto.encrypt(&message) {
+                tokio::spawn(async move {
+                    let _ = tx.send(encoded_message).await;
+                });
+            }
 
             self.input.clear();
         }
@@ -227,5 +230,17 @@ impl UI {
 
     fn add_character(&mut self, ch: char) {
         self.input.push(ch);
+    }
+
+    async fn send_join(&self) {
+        let tx: Sender<String> = self.tx_to_network.clone();
+        let join_event = ChatEvent::Join {
+            username: self.username.clone(),
+        };
+        let connect_message = serde_json::to_string(&join_event).unwrap();
+
+        if let Ok(encoded_message) = self.crypto.encrypt(&connect_message) {
+            let _ = tx.send(encoded_message).await;
+        }
     }
 }

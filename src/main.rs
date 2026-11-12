@@ -1,4 +1,5 @@
 mod arguments;
+mod crypto;
 mod ui;
 mod websocket;
 
@@ -13,7 +14,7 @@ async fn main() {
         .connect()
         .await
         .expect("Error to connect websocket");
-    let ui = UI::new(tx_to_network, tr_from_network, args.username);
+    let ui = UI::new(tx_to_network, tr_from_network, args.username, args.key);
 
     ui.create().await.expect("Create UI interface error");
 }
