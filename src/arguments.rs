@@ -5,18 +5,18 @@ use clap::Parser;
 const MAX_LENGTH_USERNAME: usize = 20;
 const MIN_LENGTH_USERNAME: usize = 2;
 
-/// Termtalk - terminal-based chat by Sergey Klimov
+/// Termtalk - Lightweight, end-to-end encrypted terminal chat written in Rust
 #[derive(Parser)]
-#[command(version, about, long_about = None, override_usage = "termtalk <HOST> --port <PORT> --username <USERNAME> --key <KEY>")]
+#[command(version, about, long_about = None, override_usage = "termtalk <HOST> --port <PORT> --username <NAME> --key <SECRET>")]
 pub struct Arguments {
     /// Host to connect
     pub host: Ipv4Addr,
 
     /// Port of the host
-    #[arg(short, long, default_value_t = 8000)]
+    #[arg(short, long)]
     pub port: u16,
 
-    /// Name of the user
+    /// Display name in chat (validated: 2 to 20 characters)
     #[arg(short, long, value_parser = validate_username)]
     pub username: String,
 
