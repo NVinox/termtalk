@@ -11,3 +11,9 @@ futures-util = "0.3.34"
 ratatui = "0.30.2"
 tokio = { version = "1.54.1", features = ["full"] }
 tokio-tungstenite = "0.30.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+textwrap = "0.16.4"
+chacha20poly1305 = "0.11.0"
+sha2 = "0.11.1"
+base64 = "0.23.1"
