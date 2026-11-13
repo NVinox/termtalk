@@ -37,7 +37,7 @@
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com
+   git clone https://github.com/NVinox/termtalk.git
    cd termtalk
    ```
 
@@ -49,13 +49,13 @@
 
 3. Run the client:
    ```bash
-   ./target/release/termtalk <HOST> --username <NAME> --key <SECRET>
+   ./target/release/termtalk <HOST> --port <PORT> --username <NAME> --key <SECRET>
    ```
 
 ### Example
 
 ```bash
-./target/release/termtalk 127.0.0.1 -u Sergey -k my_secret_room
+./target/release/termtalk 127.0.0.1 -p 8000 -u Sergey -k my_secret_room
 ```
 
 ### CLI Arguments
