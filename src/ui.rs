@@ -37,6 +37,7 @@ const INPUT_MAX_LINES: u16 = 8;
 pub enum ChatEvent {
     UserMessage { username: String, text: String },
     Join { username: String },
+    Leave { username: String },
 }
 
 pub struct UI {
@@ -110,7 +111,10 @@ impl UI {
             if event::poll(Duration::from_millis(EVENT_POOL_DURATION))? {
                 if let Event::Key(key) = event::read()? {
                     match key.code {
-                        KeyCode::Esc => break,
+                        KeyCode::Esc => {
+                            self.leave_chat();
+                            break;
+                        }
                         KeyCode::Enter => {
                             self.send_message();
                         }
@@ -166,8 +170,14 @@ impl UI {
                     .collect::<Vec<_>>()
             }
             ChatEvent::Join { username } => {
-                let line = Line::from(format!("User {} is connected", username))
+                let line = Line::from(format!("User {} has joined the chat", username))
                     .green()
+                    .italic();
+                vec![ListItem::new(line)]
+            }
+            ChatEvent::Leave { username } => {
+                let line = Line::from(format!("User {} has left the chat", username))
+                    .red()
                     .italic();
                 vec![ListItem::new(line)]
             }
@@ -232,14 +242,28 @@ impl UI {
         self.input.push(ch);
     }
 
+    fn leave_chat(&mut self) {
+        let tx: Sender<String> = self.tx_to_network.clone();
+        let leave_event = ChatEvent::Leave {
+            username: self.username.clone(),
+        };
+        let leave_message = serde_json::to_string(&leave_event).unwrap();
+
+        if let Ok(encoded_message) = self.crypto.encrypt(&leave_message) {
+            tokio::spawn(async move {
+                let _ = tx.send(encoded_message).await;
+            });
+        }
+    }
+
     async fn send_join(&self) {
         let tx: Sender<String> = self.tx_to_network.clone();
         let join_event = ChatEvent::Join {
             username: self.username.clone(),
         };
-        let connect_message = serde_json::to_string(&join_event).unwrap();
+        let join_message = serde_json::to_string(&join_event).unwrap();
 
-        if let Ok(encoded_message) = self.crypto.encrypt(&connect_message) {
+        if let Ok(encoded_message) = self.crypto.encrypt(&join_message) {
             let _ = tx.send(encoded_message).await;
         }
     }
