@@ -8,7 +8,7 @@
 
 <br>
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/93241730/705518042-84e27b51-5cab-4242-b381-19ed7e632965.gif?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20261113%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20261113T191247Z&X-Amz-Expires=300&X-Amz-Signature=6d703dd371378a43dfe2459fa8a8cd11610e04658cc59fa1e3cd4eb422118e17&X-Amz-SignedHeaders=host&response-content-type=image%2Fgif" alt="Termtalk Demo" width="1200">
+<img src="https://github.com/user-attachments/assets/15efabd1-2231-49ac-bffc-85adcc457246" width="1200" alt="Termtalk Demo" />
 
 </div>
 
