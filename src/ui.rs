@@ -34,7 +34,7 @@ const INPUT_MIN_LINES: u16 = 3;
 const INPUT_MAX_LINES: u16 = 8;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ChatEvent {
+enum ChatEvent {
     UserMessage { username: String, text: String },
     Join { username: String },
     Leave { username: String },
@@ -82,7 +82,10 @@ impl UI {
         loop {
             while let Ok(encoded_message) = self.tr_from_network.try_recv() {
                 if let Ok(message) = self.crypto.decrypt(&encoded_message) {
-                    let event = serde_json::from_str(&message).unwrap();
+                    let event = match serde_json::from_str::<ChatEvent>(&message) {
+                        Ok(event) => event,
+                        Err(_) => continue,
+                    };
                     self.messages.push(event);
                 }
             }
@@ -199,7 +202,10 @@ impl UI {
                 username: self.username.clone(),
                 text: trimed.to_string(),
             };
-            let message = serde_json::to_string(&event).unwrap();
+            let message = match serde_json::to_string(&event) {
+                Ok(message) => message,
+                Err(_) => return,
+            };
             let tx = self.tx_to_network.clone();
 
             if let Ok(encoded_message) = self.crypto.encrypt(&message) {
@@ -247,7 +253,10 @@ impl UI {
         let leave_event = ChatEvent::Leave {
             username: self.username.clone(),
         };
-        let leave_message = serde_json::to_string(&leave_event).unwrap();
+        let leave_message = match serde_json::to_string(&leave_event) {
+            Ok(message) => message,
+            Err(_) => return,
+        };
 
         if let Ok(encoded_message) = self.crypto.encrypt(&leave_message) {
             tokio::spawn(async move {
@@ -261,7 +270,10 @@ impl UI {
         let join_event = ChatEvent::Join {
             username: self.username.clone(),
         };
-        let join_message = serde_json::to_string(&join_event).unwrap();
+        let join_message = match serde_json::to_string(&join_event) {
+            Ok(message) => message,
+            Err(_) => return,
+        };
 
         if let Ok(encoded_message) = self.crypto.encrypt(&join_message) {
             let _ = tx.send(encoded_message).await;
