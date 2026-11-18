@@ -40,11 +40,18 @@ enum ChatEvent {
     Leave { username: String },
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+enum ClientEvent {
+    Event(ChatEvent),
+    Error { text: String },
+    System { text: String },
+}
+
 pub struct UI {
     username: String,
     tx_to_network: Sender<String>,
     tr_from_network: Receiver<String>,
-    messages: Vec<ChatEvent>,
+    messages: Vec<ClientEvent>,
     input: String,
     autoscroll: bool,
     total_lines: usize,
@@ -84,9 +91,15 @@ impl UI {
                 if let Ok(message) = self.crypto.decrypt(&encoded_message) {
                     let event = match serde_json::from_str::<ChatEvent>(&message) {
                         Ok(event) => event,
-                        Err(_) => continue,
+                        Err(e) => {
+                            let error_message = format!("Error to read message: {}", e);
+                            self.messages.push(ClientEvent::Error {
+                                text: error_message,
+                            });
+                            continue;
+                        }
                     };
-                    self.messages.push(event);
+                    self.messages.push(ClientEvent::Event(event));
                 }
             }
 
@@ -154,34 +167,42 @@ impl UI {
             .split(frame.area())
     }
 
-    fn list_items(messages: &[ChatEvent], width: usize) -> Vec<ListItem<'_>> {
+    fn list_items(messages: &[ClientEvent], width: usize) -> Vec<ListItem<'_>> {
         messages
             .iter()
             .flat_map(|event| Self::list_item(event, width))
             .collect()
     }
 
-    fn list_item(event: &ChatEvent, width: usize) -> Vec<ListItem<'_>> {
+    fn list_item(event: &ClientEvent, width: usize) -> Vec<ListItem<'_>> {
         let options = textwrap::Options::new(width).break_words(true);
 
         match event {
-            ChatEvent::UserMessage { username, text } => {
+            ClientEvent::Event(ChatEvent::UserMessage { username, text }) => {
                 let full_text = format!("{}: {}", username, text);
                 textwrap::wrap(&full_text, &options)
                     .into_iter()
                     .map(|line| ListItem::new(Line::from(line.into_owned())))
                     .collect::<Vec<_>>()
             }
-            ChatEvent::Join { username } => {
+            ClientEvent::Event(ChatEvent::Join { username }) => {
                 let line = Line::from(format!("User {} has joined the chat", username))
                     .green()
                     .italic();
                 vec![ListItem::new(line)]
             }
-            ChatEvent::Leave { username } => {
+            ClientEvent::Event(ChatEvent::Leave { username }) => {
                 let line = Line::from(format!("User {} has left the chat", username))
                     .red()
                     .italic();
+                vec![ListItem::new(line)]
+            }
+            ClientEvent::Error { text } => {
+                let line = Line::from(format!("{}", text)).yellow().italic();
+                vec![ListItem::new(line)]
+            }
+            ClientEvent::System { text } => {
+                let line = Line::from(format!("{}", text)).yellow().italic();
                 vec![ListItem::new(line)]
             }
         }
