@@ -56,3 +56,18 @@ impl Crypto {
         String::from_utf8(plain_bytes).map_err(|_| "UTF-8 encoding error".to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crypto_encrypt_decrypt_roundtrip() {
+        let original = "secret";
+        let crypto = Crypto::new(original);
+        let encoded = crypto.encrypt(original).unwrap();
+        let decoded = crypto.decrypt(&encoded).unwrap();
+
+        assert_eq!(original, decoded.as_str());
+    }
+}
