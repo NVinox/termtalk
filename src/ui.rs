@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{EnterAlternateScreen, enable_raw_mode},
 };
 
 use ratatui::Frame;
@@ -19,12 +19,14 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::signal;
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use serde::{Deserialize, Serialize};
 use serde_json;
 
 use crate::crypto::Crypto;
+use crate::terminal_guard::TerminalGuard;
 
 const CHAT_TITLE: &'static str = " Chat ";
 const INPUT_TITLE: &'static str = " Message ";
@@ -84,10 +86,31 @@ impl UI {
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+        let _drop = TerminalGuard;
+        let (tx_signal, mut tr_signal) = mpsc::channel::<()>(1);
+
+        let tx_int = tx_signal.clone();
+        tokio::spawn(async move {
+            let _ = signal::ctrl_c().await;
+            let _ = tx_int.send(()).await;
+        });
+
+        let tx_term = tx_signal.clone();
+        tokio::spawn(async move {
+            let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("signal handler");
+            sigterm.recv().await;
+            let _ = tx_term.send(()).await;
+        });
 
         self.send_join().await;
 
         loop {
+            if tr_signal.try_recv().is_ok() {
+                self.leave_chat();
+                break;
+            }
+
             while let Ok(encoded_message) = self.tr_from_network.try_recv() {
                 if let Ok(message) = self.crypto.decrypt(&encoded_message) {
                     let event = match serde_json::from_str::<ChatEvent>(&message) {
@@ -141,6 +164,12 @@ impl UI {
                         KeyCode::Down => {
                             self.scroll_down();
                         }
+                        KeyCode::Char('c')
+                            if key.modifiers.contains(event::KeyModifiers::CONTROL) =>
+                        {
+                            self.leave_chat();
+                            break;
+                        }
                         KeyCode::Char(c) => {
                             self.add_character(c);
                         }
@@ -150,8 +179,6 @@ impl UI {
             }
         }
 
-        disable_raw_mode()?;
-        stdout().execute(LeaveAlternateScreen)?;
         Ok(())
     }
 

@@ -1,5 +1,6 @@
 mod arguments;
 mod crypto;
+mod terminal_guard;
 mod ui;
 mod websocket;
 
