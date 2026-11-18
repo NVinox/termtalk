@@ -28,6 +28,7 @@ use crate::crypto::Crypto;
 
 const CHAT_TITLE: &'static str = " Chat ";
 const INPUT_TITLE: &'static str = " Message ";
+const ERROR_READ_MESSAGE: &'static str = "Error to read message";
 
 const EVENT_POOL_DURATION: u64 = 16;
 const INPUT_MIN_LINES: u16 = 3;
@@ -91,11 +92,8 @@ impl UI {
                 if let Ok(message) = self.crypto.decrypt(&encoded_message) {
                     let event = match serde_json::from_str::<ChatEvent>(&message) {
                         Ok(event) => event,
-                        Err(e) => {
-                            let error_message = format!("Error to read message: {}", e);
-                            self.messages.push(ClientEvent::Error {
-                                text: error_message,
-                            });
+                        Err(_) => {
+                            self.send_local_error(ERROR_READ_MESSAGE);
                             continue;
                         }
                     };
@@ -225,7 +223,10 @@ impl UI {
             };
             let message = match serde_json::to_string(&event) {
                 Ok(message) => message,
-                Err(_) => return,
+                Err(_) => {
+                    self.send_local_error(ERROR_READ_MESSAGE);
+                    return;
+                }
             };
             let tx = self.tx_to_network.clone();
 
@@ -276,7 +277,10 @@ impl UI {
         };
         let leave_message = match serde_json::to_string(&leave_event) {
             Ok(message) => message,
-            Err(_) => return,
+            Err(_) => {
+                self.send_local_error(ERROR_READ_MESSAGE);
+                return;
+            }
         };
 
         if let Ok(encoded_message) = self.crypto.encrypt(&leave_message) {
@@ -286,18 +290,26 @@ impl UI {
         }
     }
 
-    async fn send_join(&self) {
+    async fn send_join(&mut self) {
         let tx: Sender<String> = self.tx_to_network.clone();
         let join_event = ChatEvent::Join {
             username: self.username.clone(),
         };
         let join_message = match serde_json::to_string(&join_event) {
             Ok(message) => message,
-            Err(_) => return,
+            Err(_) => {
+                self.send_local_error(ERROR_READ_MESSAGE);
+                return;
+            }
         };
 
         if let Ok(encoded_message) = self.crypto.encrypt(&join_message) {
             let _ = tx.send(encoded_message).await;
         }
+    }
+
+    fn send_local_error(&mut self, text: &str) {
+        let message = format!("{}", text);
+        self.messages.push(ClientEvent::Error { text: message });
     }
 }
