@@ -47,3 +47,49 @@ fn validate_username(username: &str) -> Result<String, String> {
         Ok(trimed.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_username_short_is_err() {
+        assert!(validate_username("u").is_err());
+    }
+
+    #[test]
+    fn validate_username_long_is_err() {
+        let username = "u".repeat(21);
+        assert!(validate_username(&username).is_err());
+    }
+
+    #[test]
+    fn validate_username_is_ok() {
+        let username = "u".repeat(5);
+        assert!(validate_username(&username).is_ok());
+    }
+
+    #[test]
+    fn validate_username_min_is_ok() {
+        let username = "u".repeat(MIN_LENGTH_USERNAME);
+        assert!(validate_username(&username).is_ok());
+    }
+
+    #[test]
+    fn validate_username_max_is_ok() {
+        let username = "u".repeat(MAX_LENGTH_USERNAME);
+        assert!(validate_username(&username).is_ok());
+    }
+
+    #[test]
+    fn validate_username_trim_is_ok() {
+        let username = "    uu ";
+        assert_eq!(validate_username(username).unwrap(), "uu");
+    }
+
+    #[test]
+    fn username_counts_chars_not_bytes() {
+        let username = "ё".repeat(2);
+        assert!(validate_username(&username).is_ok());
+    }
+}
