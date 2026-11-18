@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{EnterAlternateScreen, enable_raw_mode},
 };
 
 use ratatui::Frame;
@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 
 use crate::crypto::Crypto;
+use crate::terminal_guard::TerminalGuard;
 
 const CHAT_TITLE: &'static str = " Chat ";
 const INPUT_TITLE: &'static str = " Message ";
@@ -84,6 +85,7 @@ impl UI {
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+        let _drop = TerminalGuard;
 
         self.send_join().await;
 
@@ -141,6 +143,12 @@ impl UI {
                         KeyCode::Down => {
                             self.scroll_down();
                         }
+                        KeyCode::Char('c')
+                            if key.modifiers.contains(event::KeyModifiers::CONTROL) =>
+                        {
+                            self.leave_chat();
+                            break;
+                        }
                         KeyCode::Char(c) => {
                             self.add_character(c);
                         }
@@ -150,8 +158,6 @@ impl UI {
             }
         }
 
-        disable_raw_mode()?;
-        stdout().execute(LeaveAlternateScreen)?;
         Ok(())
     }
 
