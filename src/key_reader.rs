@@ -1,21 +1,16 @@
-use std::io;
+use rpassword;
 
 const MAX_LENGTH_KEY: usize = 50;
 const MIN_LENGTH_KEY: usize = 10;
 
 pub fn create() -> Result<String, String> {
-    let mut input = String::new();
-
-    println!("Secret key:");
-
     loop {
-        input.clear();
+        let key = match rpassword::prompt_password("Secret key: ") {
+            Ok(key) => key,
+            Err(e) => return Err(format!("Failed to read the encryption key {}", e)),
+        };
 
-        if let Err(e) = io::stdin().read_line(&mut input) {
-            return Err(format!("Error to read line: {}", e));
-        }
-
-        match validate_key(&input) {
+        match validate_key(&key) {
             Ok(value) => return Ok(value),
             Err(e) => {
                 println!("{}. Try again:", e);

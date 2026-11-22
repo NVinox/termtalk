@@ -17,6 +17,7 @@ textwrap = "0.16.4"
 chacha20poly1305 = "0.11.0"
 base64 = "0.23.1"
 argon2 = "0.6.0"
+rpassword = "7.5.5"
 
 [profile.release]
 strip = true
