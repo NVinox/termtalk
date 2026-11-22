@@ -1,9 +1,11 @@
+use argon2::Argon2;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use chacha20poly1305::{
     ChaCha20Poly1305, Nonce,
     aead::{Aead, Generate, KeyInit},
 };
-use sha2::{Digest, Sha256};
+
+const SALT: &str = "ew@3Cs854Sl*7%cc";
 
 pub struct Crypto {
     cipher: ChaCha20Poly1305,
@@ -11,12 +13,13 @@ pub struct Crypto {
 
 impl Crypto {
     pub fn new(password: &str) -> Self {
-        let mut hasher = Sha256::new();
+        let mut key_bytes = [0u8; 32];
 
-        hasher.update(password.as_bytes());
+        Argon2::default()
+            .hash_password_into(password.as_bytes(), SALT.as_bytes(), &mut key_bytes)
+            .expect("Error to create key hash");
 
-        let key = hasher.finalize();
-        let cipher = ChaCha20Poly1305::new(&key);
+        let cipher = ChaCha20Poly1305::new_from_slice(&key_bytes).expect("Error to create cipher");
 
         Self { cipher }
     }
@@ -54,5 +57,20 @@ impl Crypto {
             .map_err(|_| "Failed to decrypt the message".to_string())?;
 
         String::from_utf8(plain_bytes).map_err(|_| "UTF-8 encoding error".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crypto_encrypt_decrypt_roundtrip() {
+        let original = "secret";
+        let crypto = Crypto::new(original);
+        let encoded = crypto.encrypt(original).unwrap();
+        let decoded = crypto.decrypt(&encoded).unwrap();
+
+        assert_eq!(original, decoded.as_str());
     }
 }

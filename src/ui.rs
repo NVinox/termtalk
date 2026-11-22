@@ -5,7 +5,7 @@ use std::time::Duration;
 use crossterm::{
     ExecutableCommand,
     event::{self, Event, KeyCode},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    terminal::{EnterAlternateScreen, enable_raw_mode},
 };
 
 use ratatui::Frame;
@@ -19,32 +19,42 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::signal;
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use serde::{Deserialize, Serialize};
 use serde_json;
 
 use crate::crypto::Crypto;
+use crate::terminal_guard::TerminalGuard;
 
 const CHAT_TITLE: &'static str = " Chat ";
 const INPUT_TITLE: &'static str = " Message ";
+const ERROR_READ_MESSAGE: &'static str = "Error to read message";
 
 const EVENT_POOL_DURATION: u64 = 16;
 const INPUT_MIN_LINES: u16 = 3;
 const INPUT_MAX_LINES: u16 = 8;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ChatEvent {
+enum ChatEvent {
     UserMessage { username: String, text: String },
     Join { username: String },
     Leave { username: String },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+enum ClientEvent {
+    Event(ChatEvent),
+    Error { text: String },
+    System { text: String },
 }
 
 pub struct UI {
     username: String,
     tx_to_network: Sender<String>,
     tr_from_network: Receiver<String>,
-    messages: Vec<ChatEvent>,
+    messages: Vec<ClientEvent>,
     input: String,
     autoscroll: bool,
     total_lines: usize,
@@ -76,14 +86,41 @@ impl UI {
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
         let mut terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
+        let _drop = TerminalGuard;
+        let (tx_signal, mut tr_signal) = mpsc::channel::<()>(1);
+
+        let tx_int = tx_signal.clone();
+        tokio::spawn(async move {
+            let _ = signal::ctrl_c().await;
+            let _ = tx_int.send(()).await;
+        });
+
+        let tx_term = tx_signal.clone();
+        tokio::spawn(async move {
+            let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+                .expect("signal handler");
+            sigterm.recv().await;
+            let _ = tx_term.send(()).await;
+        });
 
         self.send_join().await;
 
         loop {
+            if tr_signal.try_recv().is_ok() {
+                self.leave_chat();
+                break;
+            }
+
             while let Ok(encoded_message) = self.tr_from_network.try_recv() {
                 if let Ok(message) = self.crypto.decrypt(&encoded_message) {
-                    let event = serde_json::from_str(&message).unwrap();
-                    self.messages.push(event);
+                    let event = match serde_json::from_str::<ChatEvent>(&message) {
+                        Ok(event) => event,
+                        Err(_) => {
+                            self.send_local_error(ERROR_READ_MESSAGE);
+                            continue;
+                        }
+                    };
+                    self.messages.push(ClientEvent::Event(event));
                 }
             }
 
@@ -127,6 +164,12 @@ impl UI {
                         KeyCode::Down => {
                             self.scroll_down();
                         }
+                        KeyCode::Char('c')
+                            if key.modifiers.contains(event::KeyModifiers::CONTROL) =>
+                        {
+                            self.leave_chat();
+                            break;
+                        }
                         KeyCode::Char(c) => {
                             self.add_character(c);
                         }
@@ -136,8 +179,6 @@ impl UI {
             }
         }
 
-        disable_raw_mode()?;
-        stdout().execute(LeaveAlternateScreen)?;
         Ok(())
     }
 
@@ -151,34 +192,42 @@ impl UI {
             .split(frame.area())
     }
 
-    fn list_items(messages: &[ChatEvent], width: usize) -> Vec<ListItem<'_>> {
+    fn list_items(messages: &[ClientEvent], width: usize) -> Vec<ListItem<'_>> {
         messages
             .iter()
             .flat_map(|event| Self::list_item(event, width))
             .collect()
     }
 
-    fn list_item(event: &ChatEvent, width: usize) -> Vec<ListItem<'_>> {
+    fn list_item(event: &ClientEvent, width: usize) -> Vec<ListItem<'_>> {
         let options = textwrap::Options::new(width).break_words(true);
 
         match event {
-            ChatEvent::UserMessage { username, text } => {
+            ClientEvent::Event(ChatEvent::UserMessage { username, text }) => {
                 let full_text = format!("{}: {}", username, text);
                 textwrap::wrap(&full_text, &options)
                     .into_iter()
                     .map(|line| ListItem::new(Line::from(line.into_owned())))
                     .collect::<Vec<_>>()
             }
-            ChatEvent::Join { username } => {
+            ClientEvent::Event(ChatEvent::Join { username }) => {
                 let line = Line::from(format!("User {} has joined the chat", username))
                     .green()
                     .italic();
                 vec![ListItem::new(line)]
             }
-            ChatEvent::Leave { username } => {
+            ClientEvent::Event(ChatEvent::Leave { username }) => {
                 let line = Line::from(format!("User {} has left the chat", username))
                     .red()
                     .italic();
+                vec![ListItem::new(line)]
+            }
+            ClientEvent::Error { text } => {
+                let line = Line::from(format!("{}", text)).yellow().italic();
+                vec![ListItem::new(line)]
+            }
+            ClientEvent::System { text } => {
+                let line = Line::from(format!("{}", text)).yellow().italic();
                 vec![ListItem::new(line)]
             }
         }
@@ -199,7 +248,13 @@ impl UI {
                 username: self.username.clone(),
                 text: trimed.to_string(),
             };
-            let message = serde_json::to_string(&event).unwrap();
+            let message = match serde_json::to_string(&event) {
+                Ok(message) => message,
+                Err(_) => {
+                    self.send_local_error(ERROR_READ_MESSAGE);
+                    return;
+                }
+            };
             let tx = self.tx_to_network.clone();
 
             if let Ok(encoded_message) = self.crypto.encrypt(&message) {
@@ -247,7 +302,13 @@ impl UI {
         let leave_event = ChatEvent::Leave {
             username: self.username.clone(),
         };
-        let leave_message = serde_json::to_string(&leave_event).unwrap();
+        let leave_message = match serde_json::to_string(&leave_event) {
+            Ok(message) => message,
+            Err(_) => {
+                self.send_local_error(ERROR_READ_MESSAGE);
+                return;
+            }
+        };
 
         if let Ok(encoded_message) = self.crypto.encrypt(&leave_message) {
             tokio::spawn(async move {
@@ -256,15 +317,26 @@ impl UI {
         }
     }
 
-    async fn send_join(&self) {
+    async fn send_join(&mut self) {
         let tx: Sender<String> = self.tx_to_network.clone();
         let join_event = ChatEvent::Join {
             username: self.username.clone(),
         };
-        let join_message = serde_json::to_string(&join_event).unwrap();
+        let join_message = match serde_json::to_string(&join_event) {
+            Ok(message) => message,
+            Err(_) => {
+                self.send_local_error(ERROR_READ_MESSAGE);
+                return;
+            }
+        };
 
         if let Ok(encoded_message) = self.crypto.encrypt(&join_message) {
             let _ = tx.send(encoded_message).await;
         }
+    }
+
+    fn send_local_error(&mut self, text: &str) {
+        let message = format!("{}", text);
+        self.messages.push(ClientEvent::Error { text: message });
     }
 }
