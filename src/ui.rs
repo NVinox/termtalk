@@ -89,19 +89,31 @@ impl UI {
         let _drop = TerminalGuard;
         let (tx_signal, mut tr_signal) = mpsc::channel::<()>(1);
 
-        let tx_int = tx_signal.clone();
-        tokio::spawn(async move {
-            let _ = signal::ctrl_c().await;
-            let _ = tx_int.send(()).await;
-        });
+        #[cfg(unix)]
+        {
+            let tx_int = tx_signal.clone();
+            tokio::spawn(async move {
+                let _ = signal::ctrl_c().await;
+                let _ = tx_int.send(()).await;
+            });
 
-        let tx_term = tx_signal.clone();
-        tokio::spawn(async move {
-            let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("signal handler");
-            sigterm.recv().await;
-            let _ = tx_term.send(()).await;
-        });
+            let tx_term = tx_signal.clone();
+            tokio::spawn(async move {
+                let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())
+                    .expect("signal handler");
+                sigterm.recv().await;
+                let _ = tx_term.send(()).await;
+            });
+        }
+
+        #[cfg(windows)]
+        {
+            let tx_int = tx_signal.clone();
+            tokio::spawn(async move {
+                let _ = signal::ctrl_c().await;
+                let _ = tx_int.send(()).await;
+            });
+        }
 
         self.send_join().await;
 
