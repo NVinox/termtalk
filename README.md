@@ -8,7 +8,7 @@
 
 <br>
 
-<img src="https://github.com/user-attachments/assets/15efabd1-2231-49ac-bffc-85adcc457246" width="1200" alt="Termtalk Demo" />
+<img src="https://github.com/user-attachments/assets/89199d29-824f-49e8-87b5-73025782dc52" width="1200" alt="Termtalk Demo" />
 
 </div>
 
@@ -49,24 +49,23 @@
 
 3. Run the client:
    ```bash
-   ./target/release/termtalk <HOST> --port <PORT> --username <NAME> --key <SECRET>
+   ./target/release/termtalk <HOST> --port <PORT> --username <NAME>
    ```
 
 ### Example
 
 ```bash
-./target/release/termtalk 127.0.0.1 -p 8000 -u Sergey -k my_secret_room
+./target/release/termtalk 127.0.0.1 -p 8000 -u Sergey
 ```
 
 ### CLI Arguments
 
-| Flag             | Argument     | Description                                                 |
-| :--------------- | :----------- | :---------------------------------------------------------- |
-| `<HOST>`         | IPv4 Address | Target WebSocket server IP address (e.g., `127.0.0.1`).     |
-| `-p, --port`     | `<PORT>`     | Server port.                                                |
-| `-u, --username` | `<NAME>`     | Display name in chat (validated: 2 to 20 characters).       |
-| `-k, --key`      | `<SECRET>`   | Shared secret passphrase used to derive the encryption key. |
-| `-h, --help`     | —            | Print help information.                                     |
+| Flag             | Argument     | Description                                             |
+| :--------------- | :----------- | :------------------------------------------------------ |
+| `<HOST>`         | IPv4 Address | Target WebSocket server IP address (e.g., `127.0.0.1`). |
+| `-p, --port`     | `<PORT>`     | Server port.                                            |
+| `-u, --username` | `<NAME>`     | Display name in chat (validated: 2 to 20 characters).   |
+| `-h, --help`     | —            | Print help information.                                 |
 
 ## Keyboard Controls
 
@@ -76,6 +75,7 @@
 
 ## Security Architecture
 
-1. **Key Derivation:** The user-provided passphrase is hashed using **SHA-256** to produce a 256-bit symmetric key.
-2. **Encryption:** Serialized JSON events (`Join`, `Leave`, `UserMessage`) are encrypted via `ChaCha20-Poly1305`, prepended with a fresh CSPRNG nonce, and Base64-encoded for WebSocket transport.
-3. **Verification:** Incoming payloads with an invalid authentication tag (wrong key or tampered data) are silently dropped on the client side.
+1. **Key Derivation:** The user-provided passphrase is processed using **Argon2** (the default variant) with a fixed salt to produce a 256-bit symmetric key.
+2. **Limitation:** The current implementation uses a fixed salt and a simplified KDF configuration. While sufficient for a private chat room, it is not audited for enterprise-grade security.
+3. **Encryption:** Serialized JSON events (`Join`, `Leave`, `UserMessage`) are encrypted via `ChaCha20-Poly1305`, prepended with a fresh CSPRNG nonce, and Base64-encoded for WebSocket transport.
+4. **Verification:** Incoming payloads with an invalid authentication tag (wrong key or tampered data) are silently dropped on the client side.
